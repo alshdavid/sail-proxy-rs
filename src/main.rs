@@ -15,6 +15,7 @@ async fn main() -> anyhow::Result<()> {
 
   let ctx = HandlerContext {
     config: Arc::new(config),
+    client: reqwest::Client::new(),
   };
 
   let mut app = Router::<HandlerContext>::new(ctx).with(uhttp::middleware::logger_default);

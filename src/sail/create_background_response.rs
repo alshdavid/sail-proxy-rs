@@ -79,7 +79,7 @@ pub enum InputContent {
   },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ImageDetail {
   Auto,
@@ -121,7 +121,7 @@ pub enum ToolChoice {
   Function(FunctionToolChoice),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolChoiceMode {
   None,
@@ -163,7 +163,7 @@ pub struct ReasoningConfig {
   pub generate_summary: Option<ReasoningSummary>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReasoningEffort {
   None,
@@ -192,6 +192,15 @@ pub enum ResponseStatus {
   Incomplete,
   Failed,
   Cancelled,
+}
+
+impl ResponseStatus {
+  pub fn is_terminal(self) -> bool {
+    matches!(
+      self,
+      Self::Completed | Self::Incomplete | Self::Failed | Self::Cancelled
+    )
+  }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -264,7 +273,7 @@ pub enum IncompleteReason {
   Other,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct Usage {
   pub input_tokens: u64,
   #[serde(default)]
