@@ -1,16 +1,11 @@
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use serde_json::json;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::Mutex;
 use uhttp::Request;
 use uhttp::Response;
-use uhttp::sse::ServerSentEventsOptions;
 
 use crate::handler_context::HandlerContext;
 
