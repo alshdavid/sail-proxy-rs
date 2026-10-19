@@ -61,17 +61,18 @@ pub enum MessageContent {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type")]
 pub enum InputContent {
-  InputText {
-    text: String,
-  },
-  InputImage {
+  #[serde(rename = "input_text")]
+  Text { text: String },
+  #[serde(rename = "input_image")]
+  Image {
     image_url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     detail: Option<ImageDetail>,
   },
-  InputFile {
+  #[serde(rename = "input_file")]
+  File {
     file_data: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     filename: Option<String>,
@@ -360,3 +361,123 @@ pub async fn get_response(
 
   Ok(Some(res.json::<SailResponse>().await?))
 }
+
+/*
+Example:
+
+mod config;
+mod handler_context;
+mod handlers;
+mod sail;
+
+use uhttp::Router;
+
+use crate::handler_context::HandlerContext;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+  let config = config::Config::parse()?;
+
+  let client = reqwest::Client::new();
+  let idempotency_key = uuid::Uuid::new_v4().to_string();
+
+  let response = sail::create_background_response(
+    &client,
+    &config.sail_api_base,
+    &config.sail_api_key,
+    &idempotency_key,
+    &sail::CreateResponseRequest {
+      model: "deepseek-ai/DeepSeek-V4.1-Flash".to_string(),
+      input: Vec::<sail::InputItem>::from_iter([sail::InputItem::Message(sail::InputMessage {
+        role: sail::Role::User,
+        content: sail::MessageContent::Text("Hello, how are you?".to_string()),
+      })]),
+      instructions: None,
+      tools: vec![],
+      tool_choice: None,
+      parallel_tool_calls: None,
+      max_output_tokens: None,
+      temperature: None,
+      top_p: None,
+      text: None,
+      reasoning: None,
+      user: None,
+    },
+  )
+  .await?;
+
+  println!("created {} ({:?})", response.id, response.status);
+
+  let mut last_status = response.status;
+  let response = loop {
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
+    let Some(response) = sail::get_response(
+      &client,
+      &config.sail_api_base,
+      &config.sail_api_key,
+      &response.id,
+    )
+    .await?
+    else {
+      continue;
+    };
+
+    if response.status != last_status {
+      println!("status: {:?}", response.status);
+      last_status = response.status;
+    }
+
+    if matches!(
+      response.status,
+      sail::ResponseStatus::Completed
+        | sail::ResponseStatus::Incomplete
+        | sail::ResponseStatus::Failed
+        | sail::ResponseStatus::Cancelled
+    ) {
+      break response;
+    }
+  };
+
+  for item in response.output.iter().flatten() {
+    match item {
+      sail::OutputItem::Message { content } => {
+        for part in content {
+          match part {
+            sail::OutputContent::OutputText { text } => println!("text: {text}"),
+            sail::OutputContent::Refusal { refusal } => println!("refusal: {refusal}"),
+            sail::OutputContent::Unknown => println!("unknown content part"),
+          }
+        }
+      }
+      sail::OutputItem::FunctionCall {
+        call_id,
+        name,
+        arguments,
+      } => println!("tool call {call_id}: {name}({arguments})"),
+      sail::OutputItem::Reasoning { summary, content } => {
+        for part in summary.iter().chain(content.iter()).flatten() {
+          match part {
+            sail::ReasoningContent::SummaryText { text }
+            | sail::ReasoningContent::ReasoningText { text } => println!("reasoning: {text}"),
+            sail::ReasoningContent::Unknown => println!("unknown reasoning part"),
+          }
+        }
+      }
+      sail::OutputItem::Unknown => println!("unknown output item"),
+    }
+  }
+
+  if let Some(details) = &response.incomplete_details {
+    println!("incomplete: {:?}", details.reason);
+  }
+  if let Some(error) = &response.error {
+    println!("error: {error:?}");
+  }
+  if let Some(usage) = &response.usage {
+    println!("usage: {usage:?}");
+  }
+
+  Ok(())
+}
+*/

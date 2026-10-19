@@ -1,3 +1,4 @@
+mod config;
 mod handler_context;
 mod handlers;
 mod sail;
@@ -8,6 +9,8 @@ use crate::handler_context::HandlerContext;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+  let config = config::Config::parse()?;
+
   let mut app =
     Router::<HandlerContext>::new(HandlerContext {}).with(uhttp::middleware::logger_default);
 
