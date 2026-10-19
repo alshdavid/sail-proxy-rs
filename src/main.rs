@@ -2,6 +2,7 @@ mod config;
 mod handler_context;
 mod handlers;
 mod sail;
+mod self_upgrade;
 
 use std::sync::Arc;
 
@@ -11,6 +12,14 @@ use crate::handler_context::HandlerContext;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+  if std::env::args()
+    .collect::<Vec<String>>()
+    .contains(&"--update".to_string())
+  {
+    self_upgrade::do_update().await?;
+    return Ok(());
+  }
+
   let config = config::Config::parse()?;
 
   let ctx = HandlerContext {

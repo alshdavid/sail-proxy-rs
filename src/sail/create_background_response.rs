@@ -1,3 +1,4 @@
+#![allow(unused)]
 use reqwest::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
