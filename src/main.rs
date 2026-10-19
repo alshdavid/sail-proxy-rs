@@ -3,6 +3,8 @@ mod handler_context;
 mod handlers;
 mod sail;
 
+use std::sync::Arc;
+
 use uhttp::Router;
 
 use crate::handler_context::HandlerContext;
@@ -11,8 +13,11 @@ use crate::handler_context::HandlerContext;
 async fn main() -> anyhow::Result<()> {
   let config = config::Config::parse()?;
 
-  let mut app =
-    Router::<HandlerContext>::new(HandlerContext {}).with(uhttp::middleware::logger_default);
+  let ctx = HandlerContext {
+    config: Arc::new(config),
+  };
+
+  let mut app = Router::<HandlerContext>::new(ctx).with(uhttp::middleware::logger_default);
 
   app.any("/health", handlers::health_any);
   app.post("/v1/chat/completions", handlers::v1_chat_completions_post);
