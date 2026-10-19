@@ -1,0 +1,214 @@
+name: Release
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  version:
+    name: 🌐 Auto Version Increment
+    runs-on: ubuntu-24.04
+    outputs:
+      VERSION: ${{ steps.generate.outputs.VERSION }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: generate
+        run: |
+          set -ex
+          LAST_VERSION=$(curl -sSL https://api.github.com/repos/alshdavid/$PROJECT_NAME/releases/latest | jq -r ".tag_name" | cut -d "." -f 3)
+          if [ "$LAST_VERSION" = "" ]; then
+            # Commenting out to protect against overriding on error
+            # LAST_VERSION="0"
+            echo "Version Missing"
+            exit 1
+          fi
+          
+          declare -i var="$LAST_VERSION"
+          var=$var+1
+          VERSION="0.0.$var"
+
+          echo $VERSION
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: 🧪 Test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test
+
+  format:
+    name: 📝 Format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-xfmt
+      - run: cargo xfmt --check
+
+  lint:
+    name: 🤓 Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets --workspace -- -D warnings
+
+  build:
+    strategy:
+      matrix:
+        config:
+          - name: 🐥 Linux AMD64
+            runner: ubuntu-24.04
+            os: linux
+            arch: amd64
+            target: x86_64-unknown-linux-musl
+            run: |
+              sudo apt-get update
+              sudo apt-get install -y musl-tools
+              rustup target add x86_64-unknown-linux-musl
+
+          - name: 🐥 Linux ARM64
+            runner: ubuntu-24.04-arm
+            os: linux
+            arch: arm64
+            target: aarch64-unknown-linux-musl
+            run: |
+              sudo apt-get update
+              sudo apt-get install -y musl-tools
+              rustup target add aarch64-unknown-linux-musl
+
+          # - name: 🍎 MacOS ARM64
+          #   runner: macos-15
+          #   os: macos
+          #   arch: arm64
+          #   target: aarch64-apple-darwin
+
+          # - name: 🟦 Windows AMD64
+          #   runner: windows-latest
+          #   os: windows
+          #   arch: amd64
+          #   target: x86_64-pc-windows-msvc
+          #   run: rustup target add x86_64-pc-windows-msvc
+
+          # - name: 🟦 Windows ARM64
+          #   runner: windows-latest
+          #   os: windows
+          #   arch: arm64
+          #   target: aarch64-pc-windows-msvc
+          #   run: rustup target add aarch64-pc-windows-msvc
+
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.runner }}
+    needs:
+      - version
+      - format
+      - lint
+      - test
+    steps:
+      - uses: actions/checkout@v7
+      - run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.config.target }}
+      - if: matrix.config.run
+        run: ${{ matrix.config.run }}
+      - env:
+          VERSION: ${{needs.version.outputs.VERSION}}
+        run: sed "s/0.0.0-local/${VERSION}/g" "Cargo.toml" > "Cargo.toml.new" && mv "Cargo.toml.new" "Cargo.toml"
+      - env:
+          os: "${{ matrix.config.os }}"
+          arch: "${{ matrix.config.arch }}"
+          profile: "release"
+        run: cargo build --target ${{ matrix.config.target }} --release
+
+      - run: |
+          mkdir -p artifacts/${{ env.PROJECT_NAME }}-${{ matrix.config.os }}-${{ matrix.config.arch }}
+          ls -l 
+          ls -l target
+          ls -l target/${{ matrix.config.target }}
+          ls -l target/${{ matrix.config.target }}/release
+
+      - env:
+          EXE: ${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: cp target/${{ matrix.config.target }}/release/${{ env.PROJECT_NAME }}$EXE ./artifacts/${{ env.PROJECT_NAME }}-${{ matrix.config.os }}-${{ matrix.config.arch }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.PROJECT_NAME }}-${{ matrix.config.os }}-${{ matrix.config.arch }}
+          path: ${{ github.workspace }}/artifacts/**/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish_github_release:
+    name: "🔄 Publish Github Release"
+    runs-on: ubuntu-24.04
+    needs:
+      - build
+      - version
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Publish` Github Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{needs.version.outputs.VERSION}}
+        run: |
+          set -ex
+
+          echo "Tag: ${VERSION}"
+
+          gh release delete "$VERSION" --yes --cleanup-tag 2>/dev/null || true
+          gh release create $VERSION --draft --notes "Automatically built binaries"
+          gh release edit "$VERSION" --title "v${VERSION}"
+
+          cd artifacts
+          ls -la
+
+          for name in *; do
+            echo $name
+
+            cd $name
+            chmod +x ./*
+
+            tar -czf ./$name.tar.gz ./*
+            gh release upload $VERSION ${name}.tar.gz
+            rm -rf ./*.tar.gz
+
+            tar -cJf ./$name.tar.xz ./*
+            gh release upload $VERSION ${name}.tar.xz
+            rm -rf ./*.tar.xz
+
+            zip ./$name.zip ./*
+            gh release upload $VERSION ${name}.zip
+            rm -rf ./*.zip
+
+            cd ..
+          done
+
+          gh release edit $VERSION --draft=false
+
+          payload="$(jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg version "$VERSION" \
+            '{repository: $repository, version: $version}')"
+
+          curl -fsS -X POST "${{ secrets.SENTINEL_CHANGELOG_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d "$payload" || true
