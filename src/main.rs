@@ -18,12 +18,25 @@ async fn main() -> anyhow::Result<()> {
   {
     self_upgrade::do_update().await?;
     return Ok(());
+  } else {
+    if let Some(new_version) = self_upgrade::check_for_update(&self_upgrade::UpgradeOptions {
+      target_repo: self_upgrade::TARGET_REPO,
+      current_version: self_upgrade::CURRENT_VERSION,
+    })
+    .await?
+    {
+      println!(
+        "⚡ Update available: {} -> {}  (run `sail-proxy-rs --update`)",
+        self_upgrade::CURRENT_VERSION,
+        new_version
+      );
+    };
   }
 
-  let config = config::Config::parse()?;
+  let config = Arc::new(config::Config::parse()?);
 
   let ctx = HandlerContext {
-    config: Arc::new(config),
+    config: config.clone(),
     client: reqwest::Client::new(),
   };
 
@@ -32,9 +45,10 @@ async fn main() -> anyhow::Result<()> {
   app.any("/health", handlers::health_any);
   app.post("/v1/chat/completions", handlers::v1_chat_completions_post);
 
+  println!("Serving on {}", config.address);
   uhttp::Server::builder()
     .handler(app.handler())
-    .listen("0.0.0.0:9090")
+    .listen(&config.address)
     .await?;
 
   Ok(())

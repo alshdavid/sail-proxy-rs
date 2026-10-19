@@ -8,7 +8,7 @@ use self_update::backends::github;
 
 const BIN_NAME: &str = "sail-proxy-rs";
 pub const TARGET_REPO: &str = "alshdavid/sail-proxy-rs";
-const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub async fn do_update() -> anyhow::Result<bool> {
   let outcome = try_upgrade(&UpgradeOptions {
