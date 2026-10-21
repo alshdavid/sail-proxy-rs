@@ -259,9 +259,9 @@ dependencies = [
 
 [[package]]
 name = "crc32fast"
-version = "1.5.2"
+version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01a7799fd6b852db0e61728dde9a204c423b44d689dbd432522543614b490e78"
+checksum = "0ba106e844045ddc02c20768ac4b0b7cb45f2cc2ecbd833ac9f5dacb183c2055"
 dependencies = [
  "cfg-if",
 ]
@@ -2029,9 +2029,9 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "uhttp"
-version = "0.31.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "546786e3e8da653c1d625f8b58bf0aedc4b2f8d8b12efe02d8e280a1a747e87d"
+checksum = "57eb8cc436c16842afc31c8a43ceef81e03a442f9d06cbc6c6c256861d2646d1"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
